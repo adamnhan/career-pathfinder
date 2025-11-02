@@ -36,11 +36,38 @@ export default function PlansPage() {
     loadPlans();
   }, []);
 
-  function handleDetailedPlan(planId: string) {
-    // if (!isPro) ...
-    setSelectedPlanId(planId);
-    setShowUpgrade(true);
-  }
+  const [detailedPlans, setDetailedPlans] = useState<Record<string, any>>({});
+
+
+  type StudentProfile = {
+    grade: string;
+    liked_classes_clubs: string;
+    strengths: string;
+    post_hs_preference: string;
+    priority: string;
+    wildcard: string;
+  };
+
+  type Career = {
+    title: string;
+  };
+
+
+  const handleGenerateDetailedPlan = async (career: any, studentProfile: any, planId: string) => {
+    const res = await fetch("/api/detailed_plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ career, studentProfile }),
+    });
+    const data = await res.json();
+
+    const key = `${planId}::${career.title}`;
+    setDetailedPlans((prev) => ({
+      ...prev,
+      [key]: data.plan,
+    }));
+  };
+
 
   if (loading)
     return (
@@ -98,52 +125,88 @@ export default function PlansPage() {
                       </p>
                       <p>
                         <span className="text-slate-500">Goal:</span>{" "}
-                        {profile.post_hs_preference || "—"} /{" "}
-                        {profile.priority || "—"}
+                        {profile.post_hs_preference || "—"} / {profile.priority || "—"}
                       </p>
                     </div>
                   ) : null}
 
                   <div className="space-y-2">
-                    {plan?.careers?.map((c: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="rounded-lg bg-slate-900/40 border border-slate-800 p-3"
-                      >
-                        <p className="text-sm font-medium text-slate-50 flex justify-between gap-2">
-                          {c.title}
-                          {c.difficulty ? (
-                            <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded-full uppercase tracking-wide text-slate-300">
-                              {c.difficulty}
-                            </span>
-                          ) : null}
-                        </p>
-                        {c.why ? (
-                          <p className="text-xs text-slate-400 mt-1">{c.why}</p>
-                        ) : null}
-                        {c.path ? (
-                          <p className="text-xs text-slate-300 mt-2">
-                            <span className="text-slate-500">Next:</span> {c.path}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                    {plan?.careers?.map((c: any, idx: number) => {
+                      // ✅ now we can define helpers
+                      const key = `${p.id}::${c.title}`;
+                      const detailed = detailedPlans[key];
 
-                <button
-                  onClick={() => handleDetailedPlan(p.id)}
-                  className="mt-3 text-xs bg-indigo-500/80 hover:bg-indigo-500 transition text-white px-3 py-2 rounded-md w-fit"
-                >
-                  ✨ Generate detailed plan
-                </button>
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-lg bg-slate-900/40 border border-slate-800 p-3"
+                        >
+                          <p className="text-sm font-medium text-slate-50 flex justify-between gap-2">
+                            {c.title}
+                            {c.difficulty ? (
+                              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded-full uppercase tracking-wide text-slate-300">
+                                {c.difficulty}
+                              </span>
+                            ) : null}
+                          </p>
+
+                          {c.why ? (
+                            <p className="text-xs text-slate-400 mt-1">{c.why}</p>
+                          ) : null}
+
+                          {c.path ? (
+                            <p className="text-xs text-slate-300 mt-2">
+                              <span className="text-slate-500">Next:</span> {c.path}
+                            </p>
+                          ) : null}
+
+                          {/* button */}
+                          {profile ? (
+                            <button
+                              onClick={() => handleGenerateDetailedPlan(c, profile, p.id)}
+                              className="mt-3 text-xs bg-indigo-500/80 hover:bg-indigo-500 transition text-white px-3 py-2 rounded-md w-fit"
+                            >
+                              ✨ Generate detailed plan
+                            </button>
+                          ) : null}
+
+                          {/* detailed plan renders UNDER the button */}
+                          {detailed ? (
+                            <div className="mt-3 space-y-2 text-xs bg-slate-950/40 border border-slate-800 rounded-md p-3">
+                              <p className="text-slate-200 font-medium">Detailed roadmap</p>
+                              {detailed.years?.map((y: any) => (
+                                <div key={y.label} className="space-y-1">
+                                  <p className="text-slate-100">{y.label}</p>
+                                  {y.courses?.length ? (
+                                    <p>Courses: {y.courses.join(", ")}</p>
+                                  ) : null}
+                                  {y.extracurriculars?.length ? (
+                                    <p>Clubs: {y.extracurriculars.join(", ")}</p>
+                                  ) : null}
+                                  {y.projects?.length ? (
+                                    <p>Projects: {y.projects.join(", ")}</p>
+                                  ) : null}
+                                  {y.applications?.length ? (
+                                    <p>Apply: {y.applications.join(", ")}</p>
+                                  ) : null}
+                                  {y.notes ? <p>Notes: {y.notes}</p> : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                </div>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* placeholder upgrade modal */}
+      {/* keep your modal if you still want it */}
       {showUpgrade ? (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md space-y-4">
@@ -177,4 +240,4 @@ export default function PlansPage() {
       ) : null}
     </>
   );
-}
+  }
