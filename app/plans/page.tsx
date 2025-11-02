@@ -6,8 +6,10 @@ import { supabase } from "@/lib/supabaseClient";
 export default function PlansPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [detailedPlans, setDetailedPlans] = useState<Record<string, any>>({});
+  const [loadingPlans, setLoadingPlans] = useState<Record<string, boolean>>({});
+
+  
   // later: const [isPro, setIsPro] = useState(false)
 
   useEffect(() => {
@@ -36,8 +38,6 @@ export default function PlansPage() {
     loadPlans();
   }, []);
 
-  const [detailedPlans, setDetailedPlans] = useState<Record<string, any>>({});
-
 
   type StudentProfile = {
     grade: string;
@@ -54,18 +54,34 @@ export default function PlansPage() {
 
 
   const handleGenerateDetailedPlan = async (career: any, studentProfile: any, planId: string) => {
-    const res = await fetch("/api/detailed_plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ career, studentProfile }),
-    });
-    const data = await res.json();
-
     const key = `${planId}::${career.title}`;
-    setDetailedPlans((prev) => ({
-      ...prev,
-      [key]: data.plan,
-    }));
+
+    // set loading for this one card
+    setLoadingPlans((prev) => ({ ...prev, [key]: true }));
+
+    try {
+      const res = await fetch("/api/detailed_plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ career, studentProfile }),
+      });
+      const data = await res.json();
+
+      setDetailedPlans((prev) => ({
+        ...prev,
+        [key]: data.plan,
+      }));
+    } finally {
+      // stop loading for this card
+      setLoadingPlans((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleSendPlanToCalendar = (plan: any) => {
+    console.log("🗓️ Sending this plan to calendar:", plan);
+
+    // later: save this plan in state or Supabase so it can be viewed in /calendar
+    // e.g. setSelectedCalendarPlan(plan)
   };
 
 
@@ -135,6 +151,7 @@ export default function PlansPage() {
                       // ✅ now we can define helpers
                       const key = `${p.id}::${c.title}`;
                       const detailed = detailedPlans[key];
+                      const isLoading = loadingPlans[key] === true;
 
                       return (
                         <div
@@ -164,36 +181,65 @@ export default function PlansPage() {
                           {profile ? (
                             <button
                               onClick={() => handleGenerateDetailedPlan(c, profile, p.id)}
-                              className="mt-3 text-xs bg-indigo-500/80 hover:bg-indigo-500 transition text-white px-3 py-2 rounded-md w-fit"
+                              disabled={isLoading}
+                              className="mt-3 text-xs bg-indigo-500/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-500 transition text-white px-3 py-2 rounded-md w-fit"
                             >
-                              ✨ Generate detailed plan
+                              {isLoading ? "Generating..." : "✨ Generate detailed plan"}
                             </button>
                           ) : null}
+
 
                           {/* detailed plan renders UNDER the button */}
                           {detailed ? (
                             <div className="mt-3 space-y-2 text-xs bg-slate-950/40 border border-slate-800 rounded-md p-3">
-                              <p className="text-slate-200 font-medium">Detailed roadmap</p>
-                              {detailed.years?.map((y: any) => (
-                                <div key={y.label} className="space-y-1">
-                                  <p className="text-slate-100">{y.label}</p>
-                                  {y.courses?.length ? (
-                                    <p>Courses: {y.courses.join(", ")}</p>
-                                  ) : null}
-                                  {y.extracurriculars?.length ? (
-                                    <p>Clubs: {y.extracurriculars.join(", ")}</p>
-                                  ) : null}
-                                  {y.projects?.length ? (
-                                    <p>Projects: {y.projects.join(", ")}</p>
-                                  ) : null}
-                                  {y.applications?.length ? (
-                                    <p>Apply: {y.applications.join(", ")}</p>
-                                  ) : null}
-                                  {y.notes ? <p>Notes: {y.notes}</p> : null}
+                              {/* colleges */}
+                              {Array.isArray(detailed.college_targets) && detailed.college_targets.length > 0 ? (
+                                <div className="space-y-1">
+                                  <p className="text-slate-200 font-medium">College targets</p>
+                                  {detailed.college_targets.map((col: any) => (
+                                    <div key={col.name || col.label} className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-slate-100">{col.name || "Unnamed program"}</span>
+                                      {col.type ? (
+                                        <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-slate-800 text-slate-200">
+                                          {col.type}
+                                        </span>
+                                      ) : null}
+                                      {col.why ? <span className="text-slate-400">— {col.why}</span> : null}
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              ) : null}
+
+                              {/* years */}
+                              {Array.isArray(detailed.years) && detailed.years.length > 0 ? (
+                                detailed.years.map((y: any) => (
+                                  <div key={y.label} className="space-y-1">
+                                    <p className="text-slate-100">{y.label}</p>
+                                    {y.milestones?.length ? (
+                                      <ul className="list-disc list-inside text-slate-300 text-[11px]">
+                                        {y.milestones.map((m: string) => (
+                                          <li key={m}>{m}</li>
+                                        ))}
+                                      </ul>
+                                    ) : null}
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-slate-500">No timeline returned.</p>
+                              )}
+
+                              <button
+                                onClick={() => handleSendPlanToCalendar(detailed)}
+                                className="text-[10px] mt-2 px-2 py-1 rounded bg-indigo-500/70 text-white"
+                              >
+                                Add this plan to calendar
+                              </button>
+                              <p className="text-[10px] text-slate-400 mt-1 italic">
+                                Happy with this overview? Add it to your calendar to see a more detailed version.
+                              </p>
                             </div>
                           ) : null}
+
                         </div>
                       );
                     })}
@@ -205,39 +251,6 @@ export default function PlansPage() {
           })}
         </div>
       </div>
-
-      {/* keep your modal if you still want it */}
-      {showUpgrade ? (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md space-y-4">
-            <h2 className="text-lg font-semibold text-slate-50">
-              Kai Pro coming soon 🚀
-            </h2>
-            <p className="text-sm text-slate-300">
-              Detailed, year-by-year roadmaps are part of the paid tier.
-              You’ll get: high school course plan, clubs to join/start, college targets,
-              and internship sequence for the career you pick.
-            </p>
-            <p className="text-xs text-slate-500">
-              (you clicked plan #{selectedPlanId})
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowUpgrade(false)}
-                className="px-3 py-1.5 text-sm rounded-md border border-slate-600 text-slate-200"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => setShowUpgrade(false)}
-                className="px-3 py-1.5 text-sm rounded-md bg-indigo-500 text-white"
-              >
-                Notify me
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </>
   );
   }

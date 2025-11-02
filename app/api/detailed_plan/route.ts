@@ -1,3 +1,4 @@
+// app/api/detailed_plan/route.ts
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
   const prompt = `
 You are Kai, an AI career planner.
 
-Make a YEAR-BY-YEAR roadmap for this student.
+Create a realistic, step-by-step roadmap for this student.
 
 Student profile:
 - grade: ${studentProfile.grade || "unknown"}
@@ -27,28 +28,48 @@ Student profile:
 - post-HS preference: ${studentProfile.post_hs_preference || "unknown"}
 - priority: ${studentProfile.priority || "unknown"}
 - wildcard: ${studentProfile.wildcard || "unknown"}
+- location (if known): ${studentProfile.location || "unknown"}
 
 Target career: ${career.title || career}
 
-Rules:
-- Start from the student's current level (use the grade string as-is).
-- Go forward chronologically until they reach their first full-time role in this career.
-- Include concrete actions (courses, clubs, projects, applications).
-- If they are already in college, skip high school years.
-- RETURN ONLY JSON. NO markdown. NO backticks.
-- Use this exact shape:
+Requirements:
+1. Start from the student's current level (use the grade string exactly).
+2. First give YEAR-level structure (zoomed out).
+3. Inside each year, give MONTH-level actions (zoomed in) for at least the next 6–12 months.
+4. For each action, say how hard it is so the user can adjust it later.
+5. Suggest 3–5 colleges/programs that match the career and the student's preferences. Label each as reach / target / safety and say why.
+6. Mark which actions are good to "add to calendar" (deadlines, apps, tests).
+7. If the student is already in college, skip high school years.
+
+Return ONLY JSON in this exact shape:
 
 {
   "career_title": "string",
   "start_from": "string",
+  "college_targets": [
+    {
+      "name": "string",
+      "type": "reach | target | safety",
+      "why": "string"
+    }
+  ],
   "years": [
     {
       "label": "string",
-      "courses": ["string"],
-      "extracurriculars": ["string"],
-      "projects": ["string"],
-      "applications": ["string"],
-      "notes": "string"
+      "milestones": ["string"],
+      "months": [
+        {
+          "label": "string",
+          "actions": [
+            {
+              "title": "string",
+              "reason": "string",
+              "difficulty": "low | medium | high",
+              "calendar_suggested": true
+            }
+          ]
+        }
+      ]
     }
   ]
 }
@@ -68,4 +89,3 @@ Rules:
 
   return NextResponse.json({ plan });
 }
-
